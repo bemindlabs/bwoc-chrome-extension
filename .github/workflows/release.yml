@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: build · zip · publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release and upload assets (this job only)
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: Package dist/
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          zip_name="bwoc-chrome-extension-${TAG}.zip"
+          (cd dist && zip -r -X "../${zip_name}" .)
+          sha256sum "${zip_name}" > "${zip_name}.sha256"
+          cat "${zip_name}.sha256"
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          gh release upload "$TAG" \
+            "bwoc-chrome-extension-${TAG}.zip" \
+            "bwoc-chrome-extension-${TAG}.zip.sha256" --clobber
