@@ -25,9 +25,34 @@ async function baseUrl(): Promise<string> {
   return cfg.activeHostUrl.replace(/\/$/, "");
 }
 
-/** Signed request. `path` may include a query string; it is canonicalized for signing. */
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const base = await baseUrl();
+const DEFAULT_TIMEOUT_MS = 15_000;
+const RETRY_BACKOFF_MS = 400;
+/** Margin on top of a CLI call's own timeout, for the daemon round-trip. */
+const CLI_MARGIN_MS = 5_000;
+
+interface RequestOpts {
+  /** Abort the fetch after this many ms (default 15 s). */
+  timeoutMs?: number;
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+function hostOf(base: string): string {
+  try {
+    return new URL(base).host;
+  } catch {
+    return base;
+  }
+}
+
+/** One signed attempt. Signing is redone per attempt so the timestamp/nonce stay fresh. */
+async function attempt<T>(
+  base: string,
+  method: string,
+  path: string,
+  body: unknown,
+  timeoutMs: number,
+): Promise<T> {
   const [pathname, query] = path.split("?", 2);
   const canonical = canonicalPath(pathname, query ?? null);
   const bodyBytes = body === undefined ? new Uint8Array(0) : enc.encode(JSON.stringify(body));
@@ -35,15 +60,30 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const headers: Record<string, string> = { ...signed };
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let res: Response;
   try {
     res = await fetch(base + path, {
       method,
       headers,
       body: body === undefined ? undefined : (bodyBytes as BufferSource),
+      signal: ctrl.signal,
     });
   } catch (e) {
-    throw new ApiError(0, `network error: ${(e as Error).message}`);
+    const host = hostOf(base);
+    if (ctrl.signal.aborted) {
+      throw new ApiError(
+        0,
+        `${method} ${pathname} timed out after ${Math.round(timeoutMs / 1000)}s waiting for bwocd at ${host}: check the daemon is running and the host is reachable (tailscale up?)`,
+      );
+    }
+    throw new ApiError(
+      0,
+      `bwocd unreachable at ${host} (${(e as Error).message}): start it with --cors-origin chrome-extension://${typeof chrome !== "undefined" ? chrome.runtime?.id : "<id>"}, or check the host URL in options`,
+    );
+  } finally {
+    clearTimeout(timer);
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -54,14 +94,38 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return (text ? JSON.parse(text) : null) as T;
 }
 
+/**
+ * Signed request. `path` may include a query string; it is canonicalized for signing.
+ * Idempotent GETs get one retry (short backoff) on network error/timeout or 5xx;
+ * mutations are never retried.
+ */
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  opts: RequestOpts = {},
+): Promise<T> {
+  const base = await baseUrl();
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  try {
+    return await attempt<T>(base, method, path, body, timeoutMs);
+  } catch (e) {
+    const retryable = e instanceof ApiError && (e.status === 0 || e.status >= 500);
+    if (method !== "GET" || !retryable) throw e;
+    await sleep(RETRY_BACKOFF_MS);
+    return attempt<T>(base, method, path, body, timeoutMs);
+  }
+}
+
 export const api = {
-  health: () => request<{ ok: boolean }>("GET", "/health"),
-  whoami: () => request<WhoAmI>("GET", "/whoami"),
-  hosts: () => request<HostInfo>("GET", "/hosts"),
-  fleet: () => request<FleetSnapshot>("GET", "/fleet"),
-  agent: (id: string) => request<AgentEntry>("GET", `/agents/${id}`),
-  agentStatus: (id: string) => request<unknown>("GET", `/agents/${id}/status`),
-  agentInbox: (id: string) => request<unknown>("GET", `/agents/${id}/inbox`),
+  // Every GET accepts optional per-call { timeoutMs } (default 15 s).
+  health: (o?: RequestOpts) => request<{ ok: boolean }>("GET", "/health", undefined, o),
+  whoami: (o?: RequestOpts) => request<WhoAmI>("GET", "/whoami", undefined, o),
+  hosts: (o?: RequestOpts) => request<HostInfo>("GET", "/hosts", undefined, o),
+  fleet: (o?: RequestOpts) => request<FleetSnapshot>("GET", "/fleet", undefined, o),
+  agent: (id: string, o?: RequestOpts) => request<AgentEntry>("GET", `/agents/${id}`, undefined, o),
+  agentStatus: (id: string, o?: RequestOpts) => request<unknown>("GET", `/agents/${id}/status`, undefined, o),
+  agentInbox: (id: string, o?: RequestOpts) => request<unknown>("GET", `/agents/${id}/inbox`, undefined, o),
 
   /** Self-signed enrollment: register this install's public key as pending. */
   async enroll(): Promise<{ status: number; message: string }> {
@@ -77,8 +141,12 @@ export const api = {
 
   // P2: generic gated CLI proxy. Stubbed here so the client surface is stable.
   cli: (argv: string[], timeoutSecs?: number) =>
-    request<{ ok: boolean; json: unknown; tier: string }>("POST", "/cli", {
-      argv,
-      timeout_secs: timeoutSecs,
-    }),
+    request<{ ok: boolean; json: unknown; tier: string }>(
+      "POST",
+      "/cli",
+      { argv, timeout_secs: timeoutSecs },
+      timeoutSecs === undefined
+        ? undefined
+        : { timeoutMs: timeoutSecs * 1000 + CLI_MARGIN_MS },
+    ),
 };
