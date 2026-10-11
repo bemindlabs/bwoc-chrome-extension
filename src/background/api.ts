@@ -139,9 +139,9 @@ export const api = {
     }
   },
 
-  // P2: generic gated CLI proxy. Stubbed here so the client surface is stable.
+  /** Gated `/cli` proxy. bwocd returns the raw process result; callers parse `stdout`. */
   cli: (argv: string[], timeoutSecs?: number) =>
-    request<{ ok: boolean; json: unknown; tier: string }>(
+    request<{ ok: boolean; exit_code: number; stdout: string; stderr: string; tier: string }>(
       "POST",
       "/cli",
       { argv, timeout_secs: timeoutSecs },
