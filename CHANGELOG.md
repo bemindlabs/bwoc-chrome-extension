@@ -12,6 +12,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   bwocd's `--cors-origin` is fixed; derivation steps in the README.
 - **Release workflow**: tags `v*` run typecheck/test/build and attach
   `bwoc-chrome-extension-<tag>.zip` + sha256 to the GitHub Release.
+- **P2 first slice — command palette** (`Palette` tab, `Ctrl/Cmd+K`): accessible
+  (dialog/combobox/listbox roles, focus trap, `aria-activedescendant`) searchable list over a
+  typed verb registry (`src/shared/verbs.ts`) of 13 read verbs and 2 mutations, run through the
+  signed `api.cli()`. Results render as table/tree with a raw-JSON toggle and copy; errors show
+  cause + remedy.
+- Capability gating (`src/shared/capabilities.ts`): mutations are disabled without the `write`
+  cap and require an explicit confirm dialog showing the exact argv; never auto-run.
+- Tests for registry well-formedness, argv building, capability gating and result parsing.
 
 ### Changed
 
@@ -19,6 +27,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   per-call override; `cli()` uses its `timeoutSecs` + 5 s margin); idempotent GETs retry
   once on network error/timeout/5xx (signed mutations never retry); errors name the
   host and the remedy. Signing contract unchanged.
+- `api.cli()` response type now matches bwocd (`ok`, `exit_code`, `stdout`, `stderr`, `tier`)
+  instead of a non-existent `json` field; callers parse `stdout`.
 
 ## [0.1.0] - 2026-07-27
 
