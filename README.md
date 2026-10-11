@@ -33,15 +33,16 @@ self-enrolls and is approved by the operator with chosen capabilities.
 
 ## Setup
 
-1. **Build + load:**
+1. **Build + load** (or [install from a release zip](#install-from-release-zip)):
    ```bash
    pnpm install && pnpm build
    ```
    Chrome → `chrome://extensions` → enable Developer mode → *Load unpacked* → pick `dist/`.
 
-2. **Run bwocd allowing this extension's origin** (the options page shows the exact id):
+2. **Run bwocd allowing this extension's origin.** The extension id is pinned, so it is
+   the same for everyone:
    ```bash
-   bwocd --workspace <ws> --cors-origin chrome-extension://<your-extension-id>
+   bwocd --workspace <ws> --cors-origin chrome-extension://domnbaocpijnohbchnaoclndapioomgd
    ```
 
 3. **Enroll:** open the extension's **options** → *Request enrollment*. Then approve the
@@ -72,12 +73,40 @@ The signing contract (`src/background/canonical.ts`) is **byte-identical** to
 [`cc-signing`](https://github.com/bemindlabs/bwoc-control-center/blob/main/cc-signing/src/lib.rs);
 `tests/canonical.test.ts` fails if it drifts.
 
+### Install from release zip
+
+Each `v*` tag publishes `bwoc-chrome-extension-<tag>.zip` (+ `.sha256`) on the
+[Releases page](https://github.com/bemindlabs/bwoc-chrome-extension/releases).
+
+```bash
+sha256sum -c bwoc-chrome-extension-<tag>.zip.sha256
+unzip bwoc-chrome-extension-<tag>.zip -d bwoc-chrome-extension
+```
+
+Then Chrome → `chrome://extensions` → Developer mode → *Load unpacked* → pick the
+unzipped folder. The id is the same as a local build.
+
 ### Pinning the extension ID
 
-The `--cors-origin` the operator configures depends on the extension ID. For a stable ID,
-add a `key` to `manifest.config.ts` (a base64 public key) — see
-[Chrome docs](https://developer.chrome.com/docs/extensions/reference/manifest/key). Until
-then the ID is assigned per unpacked load.
+`manifest.config.ts` carries a `key` (the base64 **public** key, per the
+[Chrome docs](https://developer.chrome.com/docs/extensions/reference/manifest/key)), so the
+extension id is stable across machines and reloads:
+
+```
+domnbaocpijnohbchnaoclndapioomgd
+```
+
+Re-derive it from the manifest key (id = first 128 bits of SHA-256 of the DER public
+key, hex digits `0-9a-f` mapped to `a-p`):
+
+```bash
+grep -A1 'key:' manifest.config.ts | grep -o '"[A-Za-z0-9+/=]*"' | tr -d '"' \
+  | base64 -d | sha256sum | head -c32 | tr '0-9a-f' 'a-p'; echo
+```
+
+The matching private key is **not** in the repo (it is only needed to sign Chrome Web
+Store updates). To mint a new identity: `openssl genrsa -out key.pem 2048`, then
+`openssl rsa -in key.pem -pubout -outform DER | base64 -w0` into `key`, and update the id here.
 
 ## Requirements
 
