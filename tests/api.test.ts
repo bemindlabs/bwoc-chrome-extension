@@ -106,13 +106,14 @@ describe("errors", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("maps a network failure to ApiError(0, 'network error: ...')", async () => {
+  it("maps a network failure to ApiError(0) naming the host, cause and remedy", async () => {
     mockFetch(() => {
       throw new TypeError("Failed to fetch");
     });
     const err = await api.fleet().catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
-    expect(err).toMatchObject({ status: 0, message: "network error: Failed to fetch" });
+    expect(err.status).toBe(0);
+    expect(err.message).toMatch(/bwocd unreachable at .*\(Failed to fetch\).*--cors-origin/);
   });
 
   it("uses the response text as the message on HTTP errors", async () => {
@@ -150,6 +151,8 @@ describe("enroll", () => {
     mockFetch(() => {
       throw new Error("down");
     });
-    expect(await api.enroll()).toEqual({ status: 0, message: "network error: down" });
+    const r = await api.enroll();
+    expect(r.status).toBe(0);
+    expect(r.message).toMatch(/bwocd unreachable at .*\(down\).*--cors-origin/);
   });
 });
