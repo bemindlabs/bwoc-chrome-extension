@@ -4,6 +4,7 @@ import type { WhoAmI } from "../shared/types";
 import { Card, CapBadge, ErrorBanner } from "../shared/ui";
 import { Fleet } from "./Fleet";
 import { AgentDetail } from "./AgentDetail";
+import { Palette } from "./Palette";
 
 type Conn =
   | { state: "loading" }
@@ -13,8 +14,9 @@ type Conn =
 
 export function App() {
   const [conn, setConn] = useState<Conn>({ state: "loading" });
-  const [tab, setTab] = useState<"fleet">("fleet");
+  const [tab, setTab] = useState<"fleet" | "palette">("fleet");
   const [selected, setSelected] = useState<string | null>(null);
+  const [paletteSignal, setPaletteSignal] = useState(0);
 
   async function probe() {
     setConn({ state: "loading" });
@@ -30,6 +32,19 @@ export function App() {
   useEffect(() => {
     probe();
   }, []);
+
+  // Ctrl/Cmd+K anywhere in the side panel jumps to the palette and opens it.
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k" && tab !== "palette") {
+        e.preventDefault();
+        setTab("palette");
+        setPaletteSignal((n) => n + 1);
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [tab]);
 
   if (conn.state === "loading") {
     return (
@@ -80,14 +95,16 @@ export function App() {
         <div className={tab === "fleet" ? "tab active" : "tab"} onClick={() => setTab("fleet")}>
           Fleet
         </div>
-        <div className="tab muted" title="Coming in P2">
+        <div className={tab === "palette" ? "tab active" : "tab"} onClick={() => setTab("palette")}>
           Palette
         </div>
         <div className="tab muted" title="Coming in P3">
           Chat
         </div>
       </div>
-      {selected ? (
+      {tab === "palette" && conn.state === "ok" ? (
+        <Palette who={conn.who} openSignal={paletteSignal} />
+      ) : selected ? (
         <AgentDetail id={selected} onBack={() => setSelected(null)} />
       ) : (
         <Fleet onSelect={setSelected} />
