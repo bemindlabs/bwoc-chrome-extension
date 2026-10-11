@@ -1,0 +1,41 @@
+{
+  "_source": "bwoc-framework crates/bwoc-core/src/chat_proto.rs @ origin/main (serde internally tagged on `type`, snake_case). One real wire line per variant.",
+  "events": [
+    {"type":"ready","agent":"agent-erlang","model":"m","backend":"b","tools":["read_file","bash"]},
+    {"type":"restored","role":"assistant","text":"earlier"},
+    {"type":"token","text":"hel"},
+    {"type":"thinking","text":"hmm"},
+    {"type":"message","text":"hello"},
+    {"type":"tool_call","id":"t1","name":"write_file","args":"{\"path\":\"x\"}"},
+    {"type":"tool_result","id":"t1","name":"write_file","ok":true,"output":"done"},
+    {"type":"permission_request","id":"p1","tool":"bash","detail":"rm -rf /tmp/x"},
+    {"type":"mode_changed","mode":"accept_edits"},
+    {"type":"compacted","removed":4},
+    {"type":"diff","id":"t1","path":"a.rs","diff":"@@ -1 +1 @@","truncated":false},
+    {"type":"model_changed","model":"m2"},
+    {"type":"model_fallback","requested":"m","served":"m2"},
+    {"type":"described","topic":"permissions","rows":[["bash","ask"],["read_file","allow"]]},
+    {"type":"reverted","undo":true,"restored":["a.rs"],"conflicts":[],"skipped":[]},
+    {"type":"cancelled"},
+    {"type":"turn_end","prompt_tokens":120,"completion_tokens":45,"cost_usd":0.0021},
+    {"type":"team_message","from":"agent-x","text":"hi","ts":"2026-10-11T00:00:00Z"},
+    {"type":"error","message":"boom"},
+    {"type":"bye"}
+  ],
+  "wrapperEvents": [
+    {"type":"session","session_id":"s-123"}
+  ],
+  "inputs": [
+    {"type":"user","text":"do it","principal":{"kind":"local_operator"}},
+    {"type":"permission","id":"p1","allow":true},
+    {"type":"forget"},
+    {"type":"set_model","model":"m2"},
+    {"type":"compact"},
+    {"type":"describe","topic":"mcp"},
+    {"type":"undo"},
+    {"type":"redo"},
+    {"type":"cancel"},
+    {"type":"set_mode","mode":"bypass"},
+    {"type":"quit"}
+  ]
+}
