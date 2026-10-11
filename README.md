@@ -56,7 +56,7 @@ self-enrolls and is approved by the operator with chosen capabilities.
 | Phase | Scope | State |
 | --- | --- | --- |
 | **P1** | Read-only fleet dashboard + agent detail over signed HTTP | ✅ this release |
-| P2 | Command palette over all ~82 `--json` verbs + capability-gated mutations | planned |
+| P2 | Command palette over `bwoc --json` verbs + capability-gated mutations | 🟡 **first slice**: 13 read verbs (`list`, `status` ×3, `receipts`, `fleet status/health`, `team list`, `task list` ×2, `memory list/show --all/search`) + 2 gated mutations (`task add`, `task claim`). Not yet: the rest of the ~82 verbs, `send`/`task complete`/`outbox flush`, exec-tier verbs, multi-workspace targeting |
 | P3 | Live streaming agent chat (NDJSON `chat_proto`) + permission prompts | planned |
 | P4 | Teams/tasks + memory boards | planned |
 
@@ -65,7 +65,7 @@ self-enrolls and is approved by the operator with chosen capabilities.
 ```bash
 pnpm dev         # vite dev (HMR)
 pnpm typecheck
-pnpm test        # golden-vector cc-signing parity test (the drift guard)
+pnpm test        # cc-signing golden vector (drift guard) + palette registry/gating tests
 pnpm build       # → dist/ (load unpacked)
 ```
 
@@ -117,3 +117,13 @@ Store updates). To mint a new identity: `openssl genrsa -out key.pem 2048`, then
 ## License
 
 [MIT](./LICENSE) © 2026 Bemind Technology
+
+### Command palette (P2, first slice)
+
+Side panel → **Palette** tab, or `Ctrl/Cmd+K` anywhere in the side panel. The verb registry
+(`src/shared/verbs.ts`) only lists verbs that exist in `bwoc <verb> --help` **and** are
+proxied by bwocd's `/cli` allowlist; each entry carries its argv template, args schema,
+`kind` (`read` | `mutation`) and required capability. Mutations are listed but disabled
+unless `/whoami` reports `write`, and always show a confirm dialog with the exact command.
+Adding a verb: verify it with `bwoc <verb> --help`, check bwocd's `required_cap_for`, add the
+entry, `pnpm test`.
