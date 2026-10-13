@@ -63,12 +63,21 @@ async function attempt<T>(
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let res: Response;
+  let text: string;
   try {
     res = await fetch(base + path, {
       method,
       headers,
       body: body === undefined ? undefined : (bodyBytes as BufferSource),
       signal: ctrl.signal,
+    });
+    // Read the body while the timer is still armed: fetch resolves on headers, so a
+    // daemon that stalls mid-body would otherwise hang this call with no timeout.
+    const response = res;
+    text = await response.text().catch((e: unknown) => {
+      // An unreadable *error* body still has a usable status; anything else is a failure.
+      if (ctrl.signal.aborted || response.ok) throw e;
+      return "";
     });
   } catch (e) {
     const host = hostOf(base);
@@ -85,12 +94,8 @@ async function attempt<T>(
   } finally {
     clearTimeout(timer);
   }
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new ApiError(res.status, text || res.statusText);
-  }
+  if (!res.ok) throw new ApiError(res.status, text || res.statusText);
   // /health and a few routes return JSON; tolerate empty bodies.
-  const text = await res.text();
   return (text ? JSON.parse(text) : null) as T;
 }
 

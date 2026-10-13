@@ -200,7 +200,7 @@ export const VERBS: readonly Verb[] = [
 export type ArgValues = Record<string, string | boolean | undefined>;
 export type BuildResult = { ok: true; argv: string[] } | { ok: false; errors: string[] };
 
-/** True when `v` can't be mistaken for a flag by the CLI (and by bwocd's verb matcher). */
+/** True when `v` would be read as a flag by the CLI (and by bwocd's verb matcher). */
 const looksLikeFlag = (v: string) => v.startsWith("-");
 
 /**

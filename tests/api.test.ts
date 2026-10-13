@@ -129,6 +129,36 @@ describe("errors", () => {
   });
 });
 
+describe("timeout", () => {
+  /** A response whose headers arrive at once but whose body stalls until the request is aborted. */
+  const stalledBody = (init: RequestInit, status = 200) =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          init.signal?.addEventListener("abort", () => controller.error(new DOMException("aborted", "AbortError")));
+        },
+      }),
+      { status },
+    );
+
+  it("covers the body read, not just the headers", async () => {
+    const { calls } = mockFetch((_url, init) => stalledBody(init));
+    const err = await api.health({ timeoutMs: 20 }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(0);
+    expect(err.message).toMatch(/GET \/health timed out/);
+    expect(calls).toHaveLength(2); // a timed-out GET is retried once, like any other
+  });
+
+  it("times out a stalled error body instead of reporting an empty one", async () => {
+    mockFetch((_url, init) => stalledBody(init, 503));
+    const err = await api.fleet({ timeoutMs: 20 }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(0);
+    expect(err.message).toMatch(/GET \/fleet timed out/);
+  });
+});
+
 describe("enroll", () => {
   it("POSTs the id and public key, reporting 202 on success", async () => {
     const { calls } = mockFetch(() => new Response("", { status: 202 }));
