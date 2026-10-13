@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../background/api";
 import type { WhoAmI } from "../shared/types";
 import { Card } from "../shared/ui";
@@ -19,19 +19,25 @@ export function Palette({ who, openSignal }: { who: WhoAmI; openSignal: number }
   const [running, setRunning] = useState(false);
   const [outcome, setOutcome] = useState<CliOutcome | null>(null);
 
+  // The confirm dialog is modal: opening the search on top of it would stack two focus
+  // traps. A ref, because the keydown listener below is bound once and would otherwise
+  // read a stale `pending`.
+  const confirming = useRef(false);
+  confirming.current = pending !== null;
+
   // Ctrl/Cmd+K while the tab is mounted, plus the App-level signal when it wasn't.
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setOpen(true);
+        if (!confirming.current) setOpen(true);
       }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, []);
   useEffect(() => {
-    if (openSignal > 0) setOpen(true);
+    if (openSignal > 0 && !confirming.current) setOpen(true);
   }, [openSignal]);
 
   function choose(v: Verb) {

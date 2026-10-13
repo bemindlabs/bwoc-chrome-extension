@@ -30,6 +30,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `api.cli()` response type now matches bwocd (`ok`, `exit_code`, `stdout`, `stderr`, `tier`)
   instead of a non-existent `json` field; callers parse `stdout`.
 
+### Fixed
+
+- **Request timeout now covers the response body.** The abort timer was cleared as soon
+  as `fetch` resolved (headers), so a daemon that stalled mid-body hung the call forever.
+- **Ctrl/Cmd+K no longer opens the search dialog on top of a pending confirmation**, which
+  stacked two modal focus traps.
+
+
 ## [0.1.0] - 2026-07-27
 
 First release — **P1: read-only fleet over signed HTTP**.
